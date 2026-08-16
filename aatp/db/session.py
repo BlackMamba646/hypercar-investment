@@ -6,7 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from aatp.core.config import settings
 
-engine = create_async_engine(settings.database_url, echo=(settings.aatp_env == "development"))
+
+def _ensure_async_url(url: str) -> str:
+    if "+asyncpg" in url:
+        return url
+    if url.startswith("postgres://"):
+        return "postgresql+asyncpg://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + url[len("postgresql://"):]
+    return url
+
+
+engine = create_async_engine(_ensure_async_url(settings.database_url), echo=(settings.aatp_env == "development"))
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
