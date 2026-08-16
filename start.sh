@@ -61,20 +61,31 @@ alembic upgrade head
 echo "Checking asset catalog..."
 python3 -c "
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session as OrmSession
 from aatp.core.config import settings
 engine = create_engine(settings.database_url_sync)
 with engine.connect() as conn:
-    count = conn.execute(text('SELECT COUNT(*) FROM asset_models')).scalar()
-    if count == 0:
-        print('Seeding asset catalog...')
-        with OrmSession(engine) as session:
-            from scripts.seed_data import seed
-            seed(session)
-            session.commit()
-        print('Seed complete.')
-    else:
-        print(f'Catalog has {count} models, skipping seed.')
+    count = conn.execute(text('SELECT COUNT(*) FROM manufacturers')).scalar()
+    print(f'Manufacturers: {count}')
+engine.dispose()
+if count == 0:
+    print('Loading data fixture...')
+    exit(0)
+else:
+    print('Data already loaded, skipping fixture.')
+    exit(1)
+" && python3 -c "
+from sqlalchemy import create_engine, text
+from pathlib import Path
+from aatp.core.config import settings
+engine = create_engine(settings.database_url_sync)
+sql = Path('scripts/data_fixture.sql').read_text()
+with engine.connect() as conn:
+    for line in sql.strip().split('\n'):
+        if line.strip() and line.strip().startswith('INSERT'):
+            conn.execute(text(line))
+    conn.commit()
+    count = conn.execute(text('SELECT COUNT(*) FROM transactions')).scalar()
+    print(f'Fixture loaded: {count} transactions')
 engine.dispose()
 "
 
