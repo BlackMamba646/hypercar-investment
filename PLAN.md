@@ -155,9 +155,9 @@ The modules are built in dependency order. Each module depends on the ones above
 
 ---
 
-### MODULE 3: Fair Value & Quote Engine — TODO (NEXT)
+### MODULE 3: Fair Value & Quote Engine — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (47/47 tests passing)
 
 **What it does:** Produces point-in-time fair value estimates (low / mid / high) for each asset model, with confidence intervals. Three sub-models feed into the fair value:
 
@@ -206,9 +206,9 @@ The modules are built in dependency order. Each module depends on the ones above
 
 ---
 
-### MODULE 4: Signal Engine & Opportunity Scanner — TODO
+### MODULE 4: Signal Engine & Opportunity Scanner — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (53/53 tests passing)
 
 **What it does:** Generates trading signals from fair value data, market events, and external catalysts. Each signal has type, strength (-1 to +1), direction (-1/0/+1), confidence, and supporting data.
 
@@ -244,9 +244,9 @@ The modules are built in dependency order. Each module depends on the ones above
 
 ---
 
-### MODULE 5: Multi-Model Consensus Engine — TODO
+### MODULE 5: Multi-Model Consensus Engine — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (64/64 tests passing)
 
 **What it does:** Six independent models each score an opportunity from -2 to +2. Aggregate score determines action. Veto logic: a -2 from any single model kills the opportunity regardless of aggregate.
 
@@ -283,9 +283,9 @@ The modules are built in dependency order. Each module depends on the ones above
 
 ---
 
-### MODULE 6: Risk Engine — TODO
+### MODULE 6: Risk Engine — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (71/71 tests passing)
 
 **What it does:** Assesses risk at position level and portfolio level. Every open position gets a composite risk score. Portfolio snapshots track concentration risk.
 
@@ -324,9 +324,9 @@ The modules are built in dependency order. Each module depends on the ones above
 
 ---
 
-### MODULE 7: Execution Engine — TODO
+### MODULE 7: Execution Engine — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (51/51 tests passing)
 
 **What it does:** Decision support for acquisition and exit. Does NOT execute trades automatically — surfaces recommendations with full cost analysis.
 
@@ -360,9 +360,9 @@ The modules are built in dependency order. Each module depends on the ones above
 
 ---
 
-### MODULE 8: Trading Ledger — TODO
+### MODULE 8: Trading Ledger — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (33/33 tests passing)
 
 **What it does:** Immutable financial record of every position, cost, and P&L calculation. The single source of truth for portfolio state.
 
@@ -395,9 +395,9 @@ IRR = internal rate of return over actual holding period
 
 ---
 
-### MODULE 9: Reconciliation & Monitoring — TODO
+### MODULE 9: Reconciliation & Monitoring — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (68/68 tests passing)
 
 **What it does:** Ensures data integrity across all modules. Detects divergences, generates alerts, and produces the daily health report.
 
@@ -431,9 +431,9 @@ IRR = internal rate of return over actual holding period
 
 ---
 
-### MODULE 10: Backtesting Environment — TODO
+### MODULE 10: Backtesting Environment — COMPLETED
 
-**Status: NOT STARTED**
+**Status: DONE** (82/82 tests passing)
 
 **What it does:** Replays historical data through the signal → consensus → risk pipeline to validate model accuracy before live deployment.
 
@@ -470,7 +470,7 @@ IRR = internal rate of return over actual holding period
 
 ## API Layer (Cross-Cutting)
 
-**Status: NOT STARTED** (built incrementally as modules complete)
+**Status: DONE** (21 endpoints across 9 route modules)
 
 FastAPI endpoints exposing each module's functionality. Built after the core engine modules are complete.
 
@@ -692,12 +692,13 @@ uvicorn aatp.api.app:app --reload
 |---|---|---|---|
 | 1 | Database Schema & Catalog | DONE | N/A (migration tested by Alembic) |
 | 2 | Data Collection & Scrapers | DONE | 63/63 passing |
-| 3 | Fair Value Engine | TODO | — |
-| 4 | Signal Engine | TODO | — |
-| 5 | Consensus Engine | TODO | — |
-| 6 | Risk Engine | TODO | — |
-| 7 | Execution Engine | TODO | — |
-| 8 | Trading Ledger | TODO | — |
-| 9 | Reconciliation & Monitoring | TODO | — |
-| 10 | Backtesting | TODO | — |
-| — | API Layer | TODO | — |
+| 3 | Fair Value Engine | DONE | 47/47 passing |
+| 4 | Signal Engine | DONE | 53/53 passing |
+| 5 | Consensus Engine | DONE | 64/64 passing |
+| 6 | Risk Engine | DONE | 71/71 passing |
+| 7 | Execution Engine | DONE | 51/51 passing |
+| 8 | Trading Ledger | DONE | 33/33 passing |
+| 9 | Reconciliation & Monitoring | DONE | 68/68 passing |
+| 10 | Backtesting | DONE | 82/82 passing |
+| — | API Layer | DONE | 21 endpoints, app loads |
+| | **TOTAL** | **COMPLETE** | **532/532 passing** |

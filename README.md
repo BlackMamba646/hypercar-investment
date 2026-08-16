@@ -16,9 +16,17 @@ pytest tests/unit/ -v
 
 ## Status
 
-| Module | Status |
-|---|---|
-| Database Schema | Done |
-| Data Collection (BaT, RM Sotheby's) | Done |
-| Fair Value Engine | In Progress |
-| Signal / Consensus / Risk / Execution / Ledger / Reconciliation / Backtesting | Planned |
+| Module | Status | Tests |
+|---|---|---|
+| Database Schema & Catalog | Done | N/A |
+| Data Collection (BaT, RM Sotheby's) | Done | 63 |
+| Fair Value Engine | Done | 47 |
+| Signal Engine | Done | 53 |
+| Consensus Engine | Done | 64 |
+| Risk Engine | Done | 71 |
+| Execution Engine | Done | 51 |
+| Trading Ledger | Done | 33 |
+| Reconciliation & Monitoring | Done | 68 |
+| Backtesting | Done | 82 |
+| API Layer (21 endpoints) | Done | — |
+| **Total** | **Complete** | **532** |
