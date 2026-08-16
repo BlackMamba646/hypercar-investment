@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from aatp.core.config import settings
 from aatp.core.logging import get_logger
-from aatp.db.models import Transaction
+from aatp.db.models import Manufacturer, Transaction
 
 logger = get_logger("api.pipeline")
 
@@ -32,6 +32,24 @@ async def _run_pipeline():
 
     try:
         logger.info("pipeline_starting")
+
+        # 0. Auto-seed catalog if empty
+        async with session_factory() as session:
+            mfr_count = (await session.execute(select(func.count(Manufacturer.id)))).scalar() or 0
+
+        if mfr_count == 0:
+            logger.info("pipeline_step", step="seeding")
+            try:
+                from sqlalchemy import create_engine
+                from sqlalchemy.orm import Session as SyncSession
+                sync_engine = create_engine(settings.database_url_sync)
+                with SyncSession(sync_engine) as sync_session:
+                    from scripts.seed_data import seed
+                    seed(sync_session)
+                sync_engine.dispose()
+                logger.info("pipeline_seed_done")
+            except Exception:
+                logger.exception("pipeline_seed_error")
 
         # 1. BaT scraper (httpx — no Playwright needed)
         logger.info("pipeline_step", step="scraping", scraper="BringATrailer")
@@ -110,3 +128,38 @@ async def pipeline_status():
         "running": _running,
         "transactions": tx_count,
     }
+
+
+@router.post("/seed")
+async def seed_catalog():
+    """Seed the asset catalog if empty."""
+    from sqlalchemy import text as sa_text
+    from aatp.db.models import Manufacturer
+
+    engine = create_async_engine(settings.database_url, echo=False)
+    session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as session:
+        mfr_count = (await session.execute(select(func.count(Manufacturer.id)))).scalar() or 0
+        if mfr_count > 0:
+            await engine.dispose()
+            return {"status": "already_seeded", "manufacturers": mfr_count}
+
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session as SyncSession
+        sync_engine = create_engine(settings.database_url_sync)
+        with SyncSession(sync_engine) as session:
+            from scripts.seed_data import seed
+            seed(session)
+        sync_engine.dispose()
+    except Exception as e:
+        import traceback
+        await engine.dispose()
+        return {"status": "error", "detail": str(e), "traceback": traceback.format_exc()}
+
+    async with session_factory() as session:
+        mfr_count = (await session.execute(select(func.count(Manufacturer.id)))).scalar() or 0
+
+    await engine.dispose()
+    return {"status": "seeded", "manufacturers": mfr_count}
