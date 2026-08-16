@@ -17,6 +17,14 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _create_enum_safe(name: str, values: tuple) -> None:
+    vals = ", ".join(f"'{v}'" for v in values)
+    op.execute(sa.text(
+        f"DO $$ BEGIN CREATE TYPE {name} AS ENUM ({vals}); "
+        f"EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+    ))
+
+
 def _create_enums() -> None:
     for name, values in [
         ("assetclass", ("car", "watch", "wine", "whisky", "art")),
@@ -35,7 +43,7 @@ def _create_enums() -> None:
         ("dealertier", ("allocation_access", "secondary_premium", "secondary_standard")),
         ("auctionhousetier", ("major", "mid", "online")),
     ]:
-        sa.Enum(*values, name=name).create(op.get_bind(), checkfirst=True)
+        _create_enum_safe(name, values)
 
 
 def upgrade() -> None:
