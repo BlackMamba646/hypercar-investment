@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from aatp.api.routes import alerts, backtest, catalog, consensus, ledger, market_data, risk, signals, valuation
+from aatp.api.routes import alerts, backtest, catalog, consensus, ledger, market_data, pipeline, risk, signals, valuation
 from aatp.core.logging import get_logger, setup_logging
 
 logger = get_logger("api.app")
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(ledger.router)
     app.include_router(alerts.router)
     app.include_router(backtest.router)
+    app.include_router(pipeline.router)
 
     @app.get("/health", tags=["system"])
     async def health_check() -> dict:
