@@ -47,6 +47,30 @@ def create_app() -> FastAPI:
     async def health_check() -> dict:
         return {"status": "ok"}
 
+    @app.get("/debug/db", tags=["system"])
+    async def debug_db() -> dict:
+        import traceback
+        from aatp.core.config import settings as s
+        info = {
+            "database_url_raw": s.database_url[:60] + "...",
+            "database_url_has_asyncpg": "+asyncpg" in s.database_url,
+        }
+        try:
+            from aatp.db.session import engine
+            info["engine_url"] = str(engine.url)[:60] + "..."
+            async with engine.connect() as conn:
+                from sqlalchemy import text
+                row = await conn.execute(text("SELECT COUNT(*) FROM manufacturers"))
+                info["manufacturers"] = row.scalar()
+                row = await conn.execute(text("SELECT COUNT(*) FROM transactions"))
+                info["transactions"] = row.scalar()
+            info["db_ok"] = True
+        except Exception as e:
+            info["db_ok"] = False
+            info["error"] = str(e)
+            info["traceback"] = traceback.format_exc()
+        return info
+
     if STATIC_DIR.is_dir():
         app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="static-assets")
 
