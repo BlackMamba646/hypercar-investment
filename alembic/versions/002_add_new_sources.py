@@ -16,8 +16,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE transactionsource ADD VALUE IF NOT EXISTS 'collecting_cars'")
-    op.execute("ALTER TYPE transactionsource ADD VALUE IF NOT EXISTS 'classic_com'")
+    op.execute("ALTER TYPE transactionsource ADD VALUE IF NOT EXISTS 'COLLECTING_CARS'")
+    op.execute("ALTER TYPE transactionsource ADD VALUE IF NOT EXISTS 'CLASSIC_COM'")
 
 
 def downgrade() -> None:
