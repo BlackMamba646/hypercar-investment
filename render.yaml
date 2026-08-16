@@ -10,11 +10,6 @@ services:
         fromDatabase:
           name: aatp-db
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: aatp-redis
-          type: redis
-          property: connectionString
       - key: AATP_ENV
         value: production
 
