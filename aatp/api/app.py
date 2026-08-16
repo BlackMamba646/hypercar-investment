@@ -3,9 +3,11 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+import traceback
+
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from aatp.api.routes import alerts, backtest, catalog, consensus, ledger, market_data, pipeline, risk, signals, valuation
 from aatp.core.logging import get_logger, setup_logging
@@ -30,6 +32,13 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception):
+        return JSONResponse(status_code=500, content={
+            "detail": str(exc),
+            "traceback": traceback.format_exc(),
+        })
 
     # Include all routers
     app.include_router(catalog.router)
