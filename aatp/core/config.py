@@ -1,40 +1,29 @@
 import os
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
-def _build_async_db_url() -> str:
-    """Derive the asyncpg database URL.
-
-    Render/Railway set DATABASE_URL as postgres://... (psycopg2 style).
-    We need postgresql+asyncpg://...
-    asyncpg handles SSL natively with Render's sslmode param.
-    """
-    raw = os.environ.get("DATABASE_URL", "")
-    if raw:
-        url = raw.replace("postgres://", "postgresql+asyncpg://", 1)
-        if url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
-    return "postgresql+asyncpg://aatp:aatp@localhost:5432/aatp"
+def _to_async_url(raw: str) -> str:
+    if raw.startswith("postgres://"):
+        return "postgresql+asyncpg://" + raw[len("postgres://"):]
+    if raw.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + raw[len("postgresql://"):]
+    return raw
 
 
-def _build_sync_db_url() -> str:
-    raw = os.environ.get("DATABASE_URL", "")
-    if raw:
-        url = raw
-        if url.startswith("postgres://"):
-            url = "postgresql://" + url[len("postgres://"):]
-        return url
-    return "postgresql://aatp:aatp@localhost:5432/aatp"
+def _to_sync_url(raw: str) -> str:
+    if raw.startswith("postgres://"):
+        return "postgresql://" + raw[len("postgres://"):]
+    return raw
 
 
 class Settings(BaseSettings):
-    database_url: str = _build_async_db_url()
-    database_url_sync: str = _build_sync_db_url()
-    redis_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    celery_broker_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
-    celery_result_backend: str = os.environ.get("REDIS_URL", "redis://localhost:6379/2")
+    database_url: str = "postgresql+asyncpg://aatp:aatp@localhost:5432/aatp"
+    database_url_sync: str = "postgresql://aatp:aatp@localhost:5432/aatp"
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
 
     aatp_env: str = "development"
     aatp_log_level: str = "INFO"
@@ -57,6 +46,14 @@ class Settings(BaseSettings):
     alert_email_to: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @model_validator(mode="after")
+    def _fix_db_urls(self) -> "Settings":
+        raw = os.environ.get("DATABASE_URL", "")
+        if raw:
+            self.database_url = _to_async_url(raw)
+            self.database_url_sync = _to_sync_url(raw)
+        return self
 
 
 settings = Settings()
