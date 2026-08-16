@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { usd, pct, num, pnlColor, severityColor, scoreColor, datetime } from '../api/format'
 import StatCard from '../components/StatCard'
@@ -9,16 +10,66 @@ import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const pnl = useQuery({ queryKey: ['pnl'], queryFn: api.getPortfolioPnl })
   const opportunities = useQuery({ queryKey: ['opportunities'], queryFn: () => api.getOpportunities({ limit: 5 }) })
   const alerts = useQuery({ queryKey: ['alerts-unread'], queryFn: () => api.getAlerts({ is_read: false, limit: 5 }) })
   const positions = useQuery({ queryKey: ['positions-open'], queryFn: () => api.getPositions({ status: 'open', limit: 5 }) })
 
+  const [pipelineState, setPipelineState] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [pipelineMsg, setPipelineMsg] = useState('')
+
+  useEffect(() => {
+    if (pipelineState !== 'running') return
+    const interval = setInterval(async () => {
+      try {
+        const s = await api.getPipelineStatus()
+        if (!s.running) {
+          setPipelineState('done')
+          setPipelineMsg(`Complete — ${s.transactions} transactions in database`)
+          queryClient.invalidateQueries()
+          clearInterval(interval)
+        }
+      } catch { /* keep polling */ }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [pipelineState, queryClient])
+
+  const handleRunPipeline = async () => {
+    setPipelineState('running')
+    setPipelineMsg('Scraping BaT + running analytics...')
+    try {
+      const res = await api.runPipeline()
+      if (res.status === 'already_running') {
+        setPipelineMsg('Pipeline already running — waiting...')
+      }
+    } catch (e) {
+      setPipelineState('error')
+      setPipelineMsg(e instanceof Error ? e.message : 'Failed to start pipeline')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-term-text">Dashboard</h1>
-        <span className="text-[10px] text-term-muted">AATP Terminal</span>
+        <div className="flex items-center gap-3">
+          {pipelineState === 'running' ? (
+            <span className="text-[10px] text-term-yellow animate-pulse">{pipelineMsg}</span>
+          ) : pipelineState === 'done' ? (
+            <span className="text-[10px] text-term-green">{pipelineMsg}</span>
+          ) : pipelineState === 'error' ? (
+            <span className="text-[10px] text-term-red">{pipelineMsg}</span>
+          ) : null}
+          <button
+            onClick={handleRunPipeline}
+            disabled={pipelineState === 'running'}
+            className="px-3 py-1 text-[10px] uppercase tracking-wider border border-term-cyan text-term-cyan hover:bg-term-cyan hover:text-term-bg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {pipelineState === 'running' ? 'Running...' : 'Run Scraper'}
+          </button>
+          <span className="text-[10px] text-term-muted">AATP Terminal</span>
+        </div>
       </div>
 
       {/* Portfolio Summary */}

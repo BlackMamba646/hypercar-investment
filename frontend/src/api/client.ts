@@ -109,4 +109,16 @@ export const api = {
   // Backtest
   createBacktest: (data: Record<string, unknown>) => post<BacktestRun>('/backtest', data),
   getBacktestRun: (id: string) => get<BacktestRun>(`/backtest/${id}`),
+
+  // Pipeline (not under /api/v1, uses /api/pipeline directly)
+  runPipeline: async () => {
+    const res = await fetch('/api/pipeline/run', { method: 'POST' })
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    return res.json() as Promise<{ status: string; message?: string }>
+  },
+  getPipelineStatus: async () => {
+    const res = await fetch('/api/pipeline/status')
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    return res.json() as Promise<{ running: boolean; transactions: number }>
+  },
 }
