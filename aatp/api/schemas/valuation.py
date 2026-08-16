@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,6 +26,6 @@ class FairValueResponse(BaseModel):
     appreciation_rate_90d: Optional[Decimal]
     appreciation_rate_365d: Optional[Decimal]
     methodology: Optional[str]
-    warnings: Optional[dict]
+    warnings: Optional[Any]
     created_at: datetime
     updated_at: datetime

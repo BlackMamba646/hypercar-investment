@@ -22,9 +22,7 @@ export default function Dashboard() {
       </div>
 
       {/* Portfolio Summary */}
-      {pnl.isLoading ? <Loading /> : pnl.error ? (
-        <ErrorMessage message={pnl.error instanceof Error ? pnl.error.message : 'Failed to load'} />
-      ) : pnl.data && (
+      {pnl.isLoading ? <Loading /> : pnl.data && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="Total Market Value" value={usd(pnl.data.total_market_value_usd)} color="cyan" />
           <StatCard label="Cost Basis" value={usd(pnl.data.total_cost_basis_usd)} color="muted" />

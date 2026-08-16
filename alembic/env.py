@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -7,6 +8,14 @@ from aatp.db.base import Base
 from aatp.db.models import *  # noqa: F401,F403 — ensure all models are registered
 
 config = context.config
+
+db_url = os.environ.get("DATABASE_URL", "")
+if db_url:
+    sync_url = db_url.replace("postgres://", "postgresql://", 1)
+    if not sync_url.startswith("postgresql://"):
+        sync_url = "postgresql://" + sync_url.split("://", 1)[-1]
+    config.set_main_option("sqlalchemy.url", sync_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

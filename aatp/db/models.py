@@ -53,6 +53,8 @@ class TransactionSource(str, enum.Enum):
     GOODING = "gooding"
     BONHAMS = "bonhams"
     CARS_AND_BIDS = "cars_and_bids"
+    COLLECTING_CARS = "collecting_cars"
+    CLASSIC_COM = "classic_com"
     DEALER_LISTING = "dealer_listing"
     PRIVATE_SALE = "private_sale"
     MANUAL_ENTRY = "manual_entry"

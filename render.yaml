@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: aatp
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aatp-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: aatp-redis
+          type: redis
+          property: connectionString
+      - key: AATP_ENV
+        value: production
+
+databases:
+  - name: aatp-db
+    plan: free
+    databaseName: aatp
+    user: aatp

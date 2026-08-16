@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from aatp.api.routes import alerts, backtest, catalog, consensus, ledger, market_data, risk, signals, valuation
 from aatp.core.logging import get_logger, setup_logging
 
 logger = get_logger("api.app")
+
+STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -40,6 +45,16 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["system"])
     async def health_check() -> dict:
         return {"status": "ok"}
+
+    if STATIC_DIR.is_dir():
+        app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="static-assets")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            file = STATIC_DIR / full_path
+            if file.is_file():
+                return FileResponse(file)
+            return FileResponse(STATIC_DIR / "index.html")
 
     return app
 

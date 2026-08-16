@@ -1,23 +1,17 @@
-"""
-RM Sotheby's scraper.
+"""Bonhams auction house scraper.
 
-Major event auctions with high-value transactions. Less frequent than BaT
-but most important for price ceiling discovery. Handles both upcoming and
-completed auction events.
-
-Uses Playwright for JS rendering — the RM Sotheby's site relies heavily
-on client-side JavaScript to render lot details and results.
+Major international auction house with motor car department. Uses Playwright
+for JS rendering. Discovers lots via their search page.
 
 Structure:
-- Auction calendar: rmsothebys.com/en/auctions/
-- Event page: rmsothebys.com/en/auctions/<slug>/
-- Lot page: rmsothebys.com/en/auctions/<event>/<lot-slug>/
+- Search: bonhams.com/search/?q=<query>&type=results
+- Lot page: cars.bonhams.com/auction/<sale_id>/preview-lot/<lot_id>/<slug>/
 """
 
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 
 from bs4 import BeautifulSoup
@@ -26,15 +20,19 @@ from aatp.collectors.playwright_base import PlaywrightScraper
 from aatp.collectors.base import ScrapedItem
 from aatp.collectors.model_matcher import AssetModelMatcher
 from aatp.core.logging import get_logger
-from aatp.db.models import (
-    Transaction,
-    TransactionSource,
-    TransactionType,
-)
+from aatp.db.models import Transaction, TransactionSource, TransactionType
 
-logger = get_logger("collectors.rmsothebys")
+logger = get_logger("collectors.bonhams")
 
-RM_BASE = "https://rmsothebys.com"
+BONHAMS_BASE = "https://www.bonhams.com"
+
+TARGET_SEARCH_TERMS = [
+    "ferrari+812", "ferrari+488+pista", "ferrari+laferrari",
+    "ferrari+f40", "ferrari+f50", "ferrari+458+speciale",
+    "ferrari+sf90", "bugatti+chiron", "bugatti+veyron",
+    "mclaren+senna", "porsche+918",
+    "lamborghini+aventador+svj",
+]
 
 TARGET_KEYWORDS = [
     "ferrari", "bugatti", "mclaren", "lamborghini", "porsche",
@@ -42,87 +40,59 @@ TARGET_KEYWORDS = [
 ]
 
 
-class RMSothebysScraper(PlaywrightScraper):
-    source = TransactionSource.RM_SOTHEBYS
-    scraper_name = "rm_sothebys_auctions"
+class BonhamsScraper(PlaywrightScraper):
+    source = TransactionSource.BONHAMS
+    scraper_name = "bonhams_motor_cars"
     scraper_version = "0.2.0"
 
-    def __init__(self, session, max_events: int = 5):
+    def __init__(self, session, search_terms: list[str] | None = None):
         super().__init__(session)
-        self._max_events = max_events
+        self._search_terms = search_terms or TARGET_SEARCH_TERMS
         self._matcher = AssetModelMatcher(session)
 
     async def discover_urls(self) -> list[str]:
-        """Discover lot URLs from recent RM Sotheby's auction events."""
         lot_urls: list[str] = []
+        seen_ids: set[str] = set()
 
-        try:
-            calendar_url = f"{RM_BASE}/en/auctions/"
-            html = await self._fetch_rendered(calendar_url, wait_selector="a[href*='/en/auctions/']")
-            event_urls = self._extract_event_urls(html)
+        for term in self._search_terms:
+            search_url = f"{BONHAMS_BASE}/search/?q={term}&type=results"
+            try:
+                html = await self._fetch_rendered(search_url, wait_selector="a[href*='bonhams.com']")
+                urls = self._extract_lot_urls(html)
+                for url in urls:
+                    lot_id = url.rstrip("/").split("/")[-1]
+                    if lot_id not in seen_ids:
+                        seen_ids.add(lot_id)
+                        lot_urls.append(url)
+            except Exception as e:
+                self._record_error(e, {"search_term": term})
 
-            for event_url in event_urls[:self._max_events]:
-                try:
-                    event_html = await self._fetch_rendered(event_url, wait_selector="a")
-                    urls = self._extract_lot_urls(event_html, event_url)
-                    lot_urls.extend(urls)
-                except Exception as e:
-                    self._record_error(e, {"event_url": event_url})
-
-        except Exception as e:
-            self._record_error(e, {"phase": "discover"})
-
-        logger.info("rm_lots_discovered", count=len(lot_urls))
+        logger.info("bonhams_lots_discovered", count=len(lot_urls))
         return lot_urls
 
-    def _extract_event_urls(self, html: str) -> list[str]:
+    def _extract_lot_urls(self, html: str) -> list[str]:
         soup = BeautifulSoup(html, "lxml")
         urls: list[str] = []
-
         for link in soup.find_all("a", href=True):
             href = link["href"]
-            if "/en/auctions/" in href and href.count("/") >= 4:
-                full_url = href if href.startswith("http") else f"{RM_BASE}{href}"
-                if full_url not in urls and full_url != f"{RM_BASE}/en/auctions/":
-                    urls.append(full_url)
-
-        return urls
-
-    def _extract_lot_urls(self, html: str, event_url: str) -> list[str]:
-        soup = BeautifulSoup(html, "lxml")
-        urls: list[str] = []
-
-        for link in soup.find_all("a", href=True):
-            href = link["href"]
-            link_text = link.get_text(strip=True).lower()
-
-            is_lot_page = (
-                "/lot/" in href or
-                (href.count("/") >= 5 and any(kw in href.lower() for kw in TARGET_KEYWORDS))
-            )
-
-            is_relevant = any(kw in link_text or kw in href.lower() for kw in TARGET_KEYWORDS)
-
-            if is_lot_page and is_relevant:
-                full_url = href if href.startswith("http") else f"{RM_BASE}{href}"
+            if ("preview-lot" in href or "/lot/" in href) and "bonhams.com" in href:
+                if href not in urls:
+                    urls.append(href)
+            elif ("/auction/" in href or "/lot/" in href) and href.startswith("/"):
+                full_url = f"{BONHAMS_BASE}{href}"
                 if full_url not in urls:
                     urls.append(full_url)
-
         return urls
 
     async def run(self, urls: list[str] | None = None) -> dict:
-        """Override run to use Playwright for fetching individual lot pages."""
         run = await self._start_run()
         self._items_collected = 0
         self._items_parsed = 0
         self._errors = []
-
         try:
             if urls is None:
                 urls = await self.discover_urls()
-
             logger.info("urls_discovered", scraper=self.scraper_name, count=len(urls))
-
             all_items: list[ScrapedItem] = []
             for url in urls:
                 try:
@@ -133,11 +103,9 @@ class RMSothebysScraper(PlaywrightScraper):
                     all_items.extend(items)
                 except Exception as e:
                     self._record_error(e, {"url": url})
-
             stored = await self.store_items(all_items)
             await self.db.commit()
             await self._finish_run(run, "completed")
-
             return {
                 "run_id": str(run.id),
                 "urls_processed": len(urls),
@@ -146,12 +114,10 @@ class RMSothebysScraper(PlaywrightScraper):
                 "items_stored": stored,
                 "errors": len(self._errors),
             }
-
         except Exception as e:
             self._record_error(e, {"phase": "run"})
             await self._finish_run(run, "failed")
             raise
-
         finally:
             await self._close_browser()
 
@@ -160,7 +126,6 @@ class RMSothebysScraper(PlaywrightScraper):
             data = self._parse_lot(url, html)
             if data is None:
                 return []
-
             return [ScrapedItem(
                 source_url=url,
                 raw_html=html,
@@ -177,16 +142,13 @@ class RMSothebysScraper(PlaywrightScraper):
         title_el = soup.find("h1")
         if title_el is None:
             return None
-
         title = title_el.get_text(strip=True)
+
         if not any(kw in title.lower() for kw in TARGET_KEYWORDS):
             return None
 
-        data: dict = {
-            "title": title,
-            "url": url,
-            "lot_id": url.rstrip("/").split("/")[-1],
-        }
+        lot_id = url.rstrip("/").split("/")[-1]
+        data: dict = {"title": title, "url": url, "lot_id": lot_id}
 
         year_match = re.search(r'\b(19[5-9]\d|20[0-4]\d)\b', title)
         if year_match:
@@ -194,51 +156,41 @@ class RMSothebysScraper(PlaywrightScraper):
 
         data.update(self._extract_estimate(soup))
         data.update(self._extract_result(soup))
-        data.update(self._extract_event_info(soup))
+        data.update(self._extract_sale_info(soup))
         data.update(self._extract_lot_details(soup))
-
-        desc_el = soup.find(class_="lot-description") or soup.find("div", class_="description")
-        if desc_el:
-            data["catalogue_description"] = desc_el.get_text(strip=True)[:5000]
 
         return data
 
     def _extract_estimate(self, soup: BeautifulSoup) -> dict:
         result: dict = {}
         page_text = soup.get_text()
-
-        estimate_patterns = [
-            re.compile(r'Estimate[:\s]*\$([0-9,]+)\s*[-–]\s*\$([0-9,]+)', re.IGNORECASE),
-            re.compile(r'Estimate[:\s]*€([0-9,]+)\s*[-–]\s*€([0-9,]+)', re.IGNORECASE),
-            re.compile(r'Estimate[:\s]*£([0-9,]+)\s*[-–]\s*£([0-9,]+)', re.IGNORECASE),
-        ]
-
-        for pattern in estimate_patterns:
+        for pattern in [
+            re.compile(r'Estimate[:\s]*[\$€£]([0-9,]+)\s*[-–]\s*[\$€£]([0-9,]+)', re.IGNORECASE),
+            re.compile(r'Est\.\s*[\$€£]([0-9,]+)\s*[-–]\s*[\$€£]([0-9,]+)', re.IGNORECASE),
+        ]:
             match = pattern.search(page_text)
             if match:
                 result["estimate_low"] = match.group(1).replace(",", "")
                 result["estimate_high"] = match.group(2).replace(",", "")
-                if "€" in pattern.pattern:
+                prefix = page_text[match.start():match.start() + 50]
+                if "€" in prefix:
                     result["estimate_currency"] = "EUR"
-                elif "£" in pattern.pattern:
+                elif "£" in prefix:
                     result["estimate_currency"] = "GBP"
                 else:
                     result["estimate_currency"] = "USD"
                 break
-
         return result
 
     def _extract_result(self, soup: BeautifulSoup) -> dict:
         result: dict = {}
         page_text = soup.get_text()
 
-        sold_patterns = [
+        for pattern in [
             re.compile(r'Sold\s+(?:for\s+)?[\$€£]([0-9,]+)', re.IGNORECASE),
             re.compile(r'Hammer\s+Price[:\s]*[\$€£]([0-9,]+)', re.IGNORECASE),
-            re.compile(r'Price\s+Realized[:\s]*[\$€£]([0-9,]+)', re.IGNORECASE),
-        ]
-
-        for pattern in sold_patterns:
+            re.compile(r'Price\s+(?:Realized|Realised)[:\s]*[\$€£]([0-9,]+)', re.IGNORECASE),
+        ]:
             match = pattern.search(page_text)
             if match:
                 result["sold"] = True
@@ -253,64 +205,52 @@ class RMSothebysScraper(PlaywrightScraper):
                 break
 
         if "sold" not in result:
-            not_sold = re.search(r'(not\s+sold|withdrawn|passed)', page_text, re.IGNORECASE)
-            if not_sold:
+            if re.search(r'(not\s+sold|withdrawn|passed|bought[\s-]in)', page_text, re.IGNORECASE):
                 result["sold"] = False
 
         if result.get("hammer_price"):
             hp = Decimal(result["hammer_price"])
-            premium = self._compute_rm_premium(hp)
+            premium = self._compute_bonhams_premium(hp)
             result["buyer_premium"] = str(premium)
             result["total_price"] = str(hp + premium)
 
         return result
 
     @staticmethod
-    def _compute_rm_premium(hammer: Decimal) -> Decimal:
-        """RM Sotheby's tiered buyer's premium schedule."""
+    def _compute_bonhams_premium(hammer: Decimal) -> Decimal:
+        """Bonhams motor car buyer's premium: 15% on first $250K, 12% on $250K-$4M, 10% above."""
         if hammer <= 250_000:
-            return hammer * Decimal("0.125")
-        elif hammer <= 1_000_000:
-            premium = Decimal("250000") * Decimal("0.125")
+            return hammer * Decimal("0.15")
+        elif hammer <= 4_000_000:
+            premium = Decimal("250000") * Decimal("0.15")
             premium += (hammer - Decimal("250000")) * Decimal("0.12")
             return premium
         else:
-            premium = Decimal("250000") * Decimal("0.125")
-            premium += Decimal("750000") * Decimal("0.12")
-            premium += (hammer - Decimal("1000000")) * Decimal("0.10")
+            premium = Decimal("250000") * Decimal("0.15")
+            premium += Decimal("3750000") * Decimal("0.12")
+            premium += (hammer - Decimal("4000000")) * Decimal("0.10")
             return premium
 
-    def _extract_event_info(self, soup: BeautifulSoup) -> dict:
+    def _extract_sale_info(self, soup: BeautifulSoup) -> dict:
         result: dict = {}
-
-        event_el = soup.find(class_="auction-title") or soup.find(class_="event-name")
-        if event_el:
-            result["auction_event"] = event_el.get_text(strip=True)
-
         page_text = soup.get_text()
-        date_patterns = [
-            re.compile(r'(\d{1,2}\s+\w+\s+\d{4})'),
-            re.compile(r'(\w+\s+\d{1,2},?\s+\d{4})'),
-        ]
-        for pattern in date_patterns:
-            match = pattern.search(page_text[:2000])
-            if match:
-                result["event_date"] = match.group(1)
+
+        for cls in ("sale-title", "auction-title", "event-name"):
+            el = soup.find(class_=cls)
+            if el:
+                result["auction_event"] = el.get_text(strip=True)
                 break
+
+        date_match = re.search(r'(\d{1,2}\s+\w+\s+\d{4}|\w+\s+\d{1,2},?\s+\d{4})', page_text[:2000])
+        if date_match:
+            result["event_date"] = date_match.group(1)
 
         return result
 
     def _extract_lot_details(self, soup: BeautifulSoup) -> dict:
         details: dict = {}
-
-        for el in soup.find_all(["li", "tr", "div"], class_=re.compile(r'lot-detail|spec')):
-            text = el.get_text(strip=True)
-            if ":" in text:
-                key, _, value = text.partition(":")
-                key_clean = key.strip().lower().replace(" ", "_")
-                details[f"detail_{key_clean}"] = value.strip()
-
         page_text = soup.get_text()
+
         mileage_match = re.search(r'(\d{1,3}(?:,\d{3})*)\s*(?:miles|km|kilometres)', page_text, re.IGNORECASE)
         if mileage_match:
             details["mileage"] = int(mileage_match.group(1).replace(",", ""))
@@ -324,7 +264,6 @@ class RMSothebysScraper(PlaywrightScraper):
 
     async def store_items(self, items: list[ScrapedItem]) -> int:
         stored = 0
-
         for item in items:
             data = item.parsed_data
             ext_id = data.get("lot_id")
@@ -334,7 +273,6 @@ class RMSothebysScraper(PlaywrightScraper):
 
             match = await self._matcher.match(data.get("title", ""))
             if match is None:
-                logger.debug("unmatched_lot", title=data.get("title"))
                 continue
 
             provenance = await self._create_provenance(item)
@@ -350,7 +288,6 @@ class RMSothebysScraper(PlaywrightScraper):
             hammer_price = Decimal(data["hammer_price"]) if data.get("hammer_price") else None
             buyer_premium = Decimal(data["buyer_premium"]) if data.get("buyer_premium") else None
             total_price = Decimal(data["total_price"]) if data.get("total_price") else None
-
             currency = data.get("currency", "USD")
 
             tx_date = date.today()
@@ -360,7 +297,7 @@ class RMSothebysScraper(PlaywrightScraper):
                 if parsed:
                     tx_date = parsed
 
-            sale_country = _infer_country_from_event(data.get("auction_event", ""))
+            sale_country = _infer_country(data.get("auction_event", ""))
 
             transaction = Transaction(
                 provenance_id=provenance.id,
@@ -379,16 +316,15 @@ class RMSothebysScraper(PlaywrightScraper):
                 mileage_unit=data.get("mileage_unit", "miles"),
                 vin=data.get("vin"),
                 sale_country=sale_country,
-                auction_house="RM Sotheby's",
+                auction_house="Bonhams",
                 auction_event=data.get("auction_event"),
-                lot_description=data.get("catalogue_description", data.get("title")),
+                lot_description=data.get("title"),
                 metadata_={
                     "match_confidence": match.confidence,
                     "match_method": match.match_method,
                     "estimate_low": data.get("estimate_low"),
                     "estimate_high": data.get("estimate_high"),
                     "estimate_currency": data.get("estimate_currency"),
-                    "details": {k: v for k, v in data.items() if k.startswith("detail_")},
                 },
             )
             self.db.add(transaction)
@@ -396,18 +332,17 @@ class RMSothebysScraper(PlaywrightScraper):
 
         if stored:
             await self.db.flush()
-
         return stored
 
 
-def _infer_country_from_event(event_name: str) -> str | None:
+def _infer_country(event_name: str) -> str | None:
     event_lower = event_name.lower()
     mapping = {
-        "monterey": "US", "amelia": "US", "arizona": "US",
-        "hershey": "US", "palm beach": "US", "auburn": "US",
-        "london": "UK", "paris": "FR", "munich": "DE",
-        "milan": "IT", "maranello": "IT",
-        "abu dhabi": "AE", "dubai": "AE",
+        "monterey": "US", "quail": "US", "scottsdale": "US",
+        "amelia": "US", "greenwich": "US", "laguna": "US",
+        "london": "UK", "goodwood": "UK", "bond street": "UK",
+        "paris": "FR", "chantilly": "FR",
+        "zurich": "CH", "gstaad": "CH",
     }
     for keyword, country in mapping.items():
         if keyword in event_lower:
