@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  --color-term-bg: #0a0a0f;
+  --color-term-surface: #12121a;
+  --color-term-border: #1e1e2e;
+  --color-term-hover: #1a1a28;
+  --color-term-text: #e0e0e8;
+  --color-term-muted: #6b6b80;
+  --color-term-green: #00ff88;
+  --color-term-red: #ff4466;
+  --color-term-cyan: #00d4ff;
+  --color-term-yellow: #ffcc00;
+  --color-term-blue: #4488ff;
+  --color-term-purple: #aa66ff;
+  --color-term-orange: #ff8844;
+}
+
+html {
+  background: var(--color-term-bg);
+  color: var(--color-term-text);
+}
+
+body {
+  margin: 0;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#root {
+  display: flex;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-term-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-term-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-term-muted); }
+
+.recharts-cartesian-grid line { stroke: #1e1e2e; }
+.recharts-text { fill: #6b6b80; font-size: 11px; }
