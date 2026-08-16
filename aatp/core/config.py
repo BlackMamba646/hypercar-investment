@@ -6,13 +6,15 @@ from pydantic_settings import BaseSettings
 def _build_async_db_url() -> str:
     """Derive the asyncpg database URL.
 
-    Railway sets DATABASE_URL as postgres://... (psycopg2 style).
+    Render/Railway set DATABASE_URL as postgres://... (psycopg2 style).
     We need postgresql+asyncpg://...
+    asyncpg handles SSL natively with Render's sslmode param.
     """
     raw = os.environ.get("DATABASE_URL", "")
     if raw:
-        url = raw.replace("postgresql://", "postgresql+asyncpg://", 1)
-        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        url = raw.replace("postgres://", "postgresql+asyncpg://", 1)
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         return url
     return "postgresql+asyncpg://aatp:aatp@localhost:5432/aatp"
 
@@ -20,9 +22,9 @@ def _build_async_db_url() -> str:
 def _build_sync_db_url() -> str:
     raw = os.environ.get("DATABASE_URL", "")
     if raw:
-        url = raw.replace("postgres://", "postgresql://", 1)
-        if not url.startswith("postgresql://"):
-            url = "postgresql://" + url.split("://", 1)[-1]
+        url = raw
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
         return url
     return "postgresql://aatp:aatp@localhost:5432/aatp"
 
